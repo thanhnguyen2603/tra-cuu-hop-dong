@@ -4,76 +4,170 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hệ thống Tra cứu Hợp đồng</title>
+    <!-- Chặn Google index -->
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+    <meta name="googlebot" content="noindex, nofollow" />
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
   <body class="bg-slate-50 min-h-screen">
-    <div class="max-w-4xl mx-auto py-12 px-4">
-      <div class="bg-white rounded-xl shadow-sm p-8 border border-slate-200">
-        <h1 class="text-2xl font-bold text-slate-800 mb-6 text-center">
-          Tra cứu thông tin Hợp đồng
-        </h1>
+    <!-- Login Form -->
+    <div id="loginPage" class="min-h-screen flex items-center justify-center">
+      <div class="bg-white rounded-xl shadow-lg p-8 border border-slate-200 w-full max-w-md">
+        <h1 class="text-2xl font-bold text-slate-800 mb-6 text-center">Đăng nhập hệ thống</h1>
 
-        <div class="flex gap-2 mb-8">
-          <input
-            id="searchInput"
-            type="text"
-            placeholder="Nhập Số HĐ, Tên khách hàng, Sản phẩm..."
-            class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-            onkeypress="if(event.key === 'Enter') handleSearch()"
-          />
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Tên đăng nhập</label>
+            <input
+              id="username"
+              type="text"
+              placeholder="Nhập tên đăng nhập"
+              class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              onkeypress="if(event.key === 'Enter') document.getElementById('password').focus()"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Mật khẩu</label>
+            <input
+              id="password"
+              type="password"
+              placeholder="Nhập mật khẩu"
+              class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              onkeypress="if(event.key === 'Enter') handleLogin()"
+            />
+          </div>
+          <div id="loginError" class="hidden text-red-500 text-sm text-center"></div>
           <button
-            onclick="handleSearch()"
-            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+            onclick="handleLogin()"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
           >
-            Tìm kiếm
+            Đăng nhập
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main App (hidden by default) -->
+    <div id="mainApp" class="hidden">
+      <div class="max-w-5xl mx-auto py-8 px-4">
+        <!-- Header with logout -->
+        <div class="flex justify-between items-center mb-6">
+          <h1 class="text-2xl font-bold text-slate-800">Tra cứu thông tin Hợp đồng</h1>
+          <button
+            onclick="handleLogout()"
+            class="text-slate-600 hover:text-red-600 text-sm font-medium transition-colors"
+          >
+            Đăng xuất
           </button>
         </div>
 
-        <div id="loading" class="hidden text-center py-4">
-          <div
-            class="animate-spin inline-block w-6 h-6 border-[3px] border-current border-t-transparent text-blue-600 rounded-full"
-            role="status"
-          ></div>
-          <p class="text-slate-500 mt-2">Đang truy vấn dữ liệu...</p>
-        </div>
+        <div class="bg-white rounded-xl shadow-sm p-6 border border-slate-200">
+          <!-- Search -->
+          <div class="flex gap-2 mb-6">
+            <input
+              id="searchInput"
+              type="text"
+              placeholder="Nhập Số HĐ, Tên khách hàng, Sản phẩm... (để trống để xem tất cả)"
+              class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              onkeypress="if(event.key === 'Enter') handleSearch()"
+            />
+            <button
+              onclick="handleSearch()"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+            >
+              Tìm kiếm
+            </button>
+          </div>
 
-        <div id="results" class="space-y-4"></div>
+          <!-- Loading -->
+          <div id="loading" class="hidden text-center py-4">
+            <div class="animate-spin inline-block w-6 h-6 border-[3px] border-current border-t-transparent text-blue-600 rounded-full" role="status"></div>
+            <p class="text-slate-500 mt-2">Đang truy vấn dữ liệu...</p>
+          </div>
+
+          <!-- Results -->
+          <div id="results" class="space-y-4"></div>
+
+          <!-- Pagination -->
+          <div id="pagination" class="hidden flex justify-center items-center gap-2 mt-6 pt-4 border-t border-slate-200"></div>
+        </div>
       </div>
     </div>
 
     <script>
-      // Sử dụng Google Visualization API (JSONP - không bị CORS)
+      // ========== CẤU HÌNH ==========
+      const USERS = {
+        'admin': 'huynh58'
+      };
       const SHEET_ID = "1o-0FD2Ej7bew8lRlIBnsW-EfDPVnnuXSN1y9qX_Bg6o";
       const SHEET_GID = "1482399048";
+      const ITEMS_PER_PAGE = 10;
 
+      // ========== STATE ==========
       let allData = [];
+      let filteredData = [];
       let headers = [];
+      let currentPage = 1;
+      let isLoggedIn = false;
 
-      // Load dữ liệu qua Google Visualization API (JSONP)
+      // ========== ĐĂNG NHẬP ==========
+      function handleLogin() {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        const errorDiv = document.getElementById('loginError');
+
+        if (USERS[username] && USERS[username] === password) {
+          isLoggedIn = true;
+          sessionStorage.setItem('loggedIn', 'true');
+          document.getElementById('loginPage').classList.add('hidden');
+          document.getElementById('mainApp').classList.remove('hidden');
+          errorDiv.classList.add('hidden');
+          loadData();
+        } else {
+          errorDiv.textContent = 'Tên đăng nhập hoặc mật khẩu không đúng!';
+          errorDiv.classList.remove('hidden');
+        }
+      }
+
+      function handleLogout() {
+        isLoggedIn = false;
+        sessionStorage.removeItem('loggedIn');
+        document.getElementById('mainApp').classList.add('hidden');
+        document.getElementById('loginPage').classList.remove('hidden');
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
+        document.getElementById('results').innerHTML = '';
+        allData = [];
+      }
+
+      function checkSession() {
+        if (sessionStorage.getItem('loggedIn') === 'true') {
+          isLoggedIn = true;
+          document.getElementById('loginPage').classList.add('hidden');
+          document.getElementById('mainApp').classList.remove('hidden');
+          loadData();
+        }
+      }
+
+      // ========== LOAD DỮ LIỆU ==========
       function loadData() {
         const statusDiv = document.getElementById("results");
         statusDiv.innerHTML = '<p class="text-center text-slate-500">Đang tải dữ liệu...</p>';
 
         const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
 
-        // Tạo script tag để load JSONP
         const script = document.createElement('script');
         script.src = url;
 
-        // Google trả về dạng: google.visualization.Query.setResponse({...})
-        // Ta cần parse response này
         window.google = window.google || {};
         window.google.visualization = window.google.visualization || {};
         window.google.visualization.Query = window.google.visualization.Query || {};
         window.google.visualization.Query.setResponse = function(response) {
           try {
             const table = response.table;
-
-            // Lấy headers
             headers = table.cols.map(col => col.label || col.id);
             console.log('Headers:', headers);
 
-            // Lấy data
             allData = table.rows.map(row => {
               const obj = {};
               row.c.forEach((cell, index) => {
@@ -84,11 +178,11 @@
             });
 
             console.log('Đã tải', allData.length, 'hợp đồng');
-            if (allData.length > 0) {
-              console.log('Dòng đầu tiên:', allData[0]);
-            }
 
-            statusDiv.innerHTML = `<p class="text-center text-green-600">Đã tải ${allData.length} hợp đồng. Nhập từ khóa để tìm kiếm.</p>`;
+            // Hiển thị toàn bộ sau khi load
+            filteredData = allData;
+            currentPage = 1;
+            renderResults();
           } catch (error) {
             console.error('Lỗi parse dữ liệu:', error);
             statusDiv.innerHTML = `<p class="text-center text-red-500">Lỗi xử lý dữ liệu: ${error.message}</p>`;
@@ -96,13 +190,13 @@
         };
 
         script.onerror = function() {
-          statusDiv.innerHTML = '<p class="text-center text-red-500">Lỗi tải dữ liệu từ Google Sheets</p>';
+          statusDiv.innerHTML = '<p class="text-center text-red-500">Lỗi tải dữ liệu từ Google Sheets. Vui lòng kiểm tra quyền truy cập Sheet.</p>';
         };
 
         document.body.appendChild(script);
       }
 
-      // Chuẩn hóa text để tìm kiếm (bỏ dấu, lowercase)
+      // ========== TÌM KIẾM ==========
       function normalizeText(text) {
         return text
           .toString()
@@ -113,42 +207,50 @@
           .replace(/Đ/g, "D");
       }
 
-      // Tìm kiếm
       function handleSearch() {
         const query = document.getElementById("searchInput").value.trim();
-        if (!query) return;
 
+        if (allData.length === 0) {
+          document.getElementById("results").innerHTML = '<p class="text-center text-red-500">Dữ liệu chưa được tải. Vui lòng đợi.</p>';
+          return;
+        }
+
+        if (!query) {
+          // Hiển thị tất cả nếu không có từ khóa
+          filteredData = allData;
+        } else {
+          const normalizedQuery = normalizeText(query);
+          filteredData = allData.filter(item => {
+            return Object.values(item).some(value => {
+              const normalizedValue = normalizeText(value);
+              return normalizedValue.includes(normalizedQuery);
+            });
+          });
+        }
+
+        currentPage = 1;
+        renderResults();
+      }
+
+      // ========== HIỂN THỊ KẾT QUẢ ==========
+      function renderResults() {
         const resultsDiv = document.getElementById("results");
+        const paginationDiv = document.getElementById("pagination");
         const loading = document.getElementById("loading");
 
-        resultsDiv.innerHTML = "";
-        loading.classList.remove("hidden");
-
-        // Nếu chưa load data
-        if (allData.length === 0) {
-          loading.classList.add("hidden");
-          resultsDiv.innerHTML = '<p class="text-center text-red-500">Dữ liệu chưa được tải. Vui lòng đợi hoặc refresh trang.</p>';
-          return;
-        }
-
-        const normalizedQuery = normalizeText(query);
-        console.log('Tìm kiếm:', query, '→ normalized:', normalizedQuery);
-
-        // Tìm kiếm
-        const results = allData.filter(item => {
-          return Object.values(item).some(value => {
-            const normalizedValue = normalizeText(value);
-            return normalizedValue.includes(normalizedQuery);
-          });
-        });
-
-        console.log('Kết quả:', results.length);
         loading.classList.add("hidden");
 
-        if (results.length === 0) {
+        if (filteredData.length === 0) {
           resultsDiv.innerHTML = '<p class="text-center text-slate-500">Không tìm thấy dữ liệu phù hợp.</p>';
+          paginationDiv.classList.add('hidden');
           return;
         }
+
+        // Tính toán phân trang
+        const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        const endIndex = startIndex + ITEMS_PER_PAGE;
+        const pageData = filteredData.slice(startIndex, endIndex);
 
         // Lấy tên cột từ headers
         const colSoHD = headers.find(h => h.includes('Số Hợp đồng') || h.includes('Số HĐ')) || headers[1];
@@ -162,8 +264,10 @@
         const colNguoiTH = headers.find(h => h.includes('Người thực hiện')) || headers[13];
 
         resultsDiv.innerHTML = `
-          <p class="text-sm text-slate-500 mb-4">Tìm thấy ${results.length} kết quả</p>
-          ${results.map(item => `
+          <p class="text-sm text-slate-500 mb-4">
+            Hiển thị ${startIndex + 1}-${Math.min(endIndex, filteredData.length)} trong tổng số ${filteredData.length} hợp đồng
+          </p>
+          ${pageData.map(item => `
             <div class="p-4 border border-slate-200 rounded-lg bg-slate-50 hover:bg-white hover:shadow-md transition-all">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                 <div>
@@ -206,10 +310,72 @@
             </div>
           `).join('')}
         `;
+
+        // Render phân trang
+        if (totalPages > 1) {
+          paginationDiv.classList.remove('hidden');
+          paginationDiv.innerHTML = renderPagination(totalPages);
+        } else {
+          paginationDiv.classList.add('hidden');
+        }
       }
 
-      // Load dữ liệu khi trang mở
-      loadData();
+      function renderPagination(totalPages) {
+        let html = '';
+
+        // Nút Previous
+        html += `<button onclick="goToPage(${currentPage - 1})"
+                  class="px-3 py-1 rounded ${currentPage === 1 ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700 hover:bg-slate-100'}"
+                  ${currentPage === 1 ? 'disabled' : ''}>
+                  ← Trước
+                </button>`;
+
+        // Số trang
+        const maxVisible = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+        if (endPage - startPage + 1 < maxVisible) {
+          startPage = Math.max(1, endPage - maxVisible + 1);
+        }
+
+        if (startPage > 1) {
+          html += `<button onclick="goToPage(1)" class="px-3 py-1 rounded hover:bg-slate-100">1</button>`;
+          if (startPage > 2) html += `<span class="px-2">...</span>`;
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+          html += `<button onclick="goToPage(${i})"
+                    class="px-3 py-1 rounded ${i === currentPage ? 'bg-blue-600 text-white' : 'hover:bg-slate-100'}">
+                    ${i}
+                  </button>`;
+        }
+
+        if (endPage < totalPages) {
+          if (endPage < totalPages - 1) html += `<span class="px-2">...</span>`;
+          html += `<button onclick="goToPage(${totalPages})" class="px-3 py-1 rounded hover:bg-slate-100">${totalPages}</button>`;
+        }
+
+        // Nút Next
+        html += `<button onclick="goToPage(${currentPage + 1})"
+                  class="px-3 py-1 rounded ${currentPage === totalPages ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700 hover:bg-slate-100'}"
+                  ${currentPage === totalPages ? 'disabled' : ''}>
+                  Sau →
+                </button>`;
+
+        return html;
+      }
+
+      function goToPage(page) {
+        const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
+        if (page < 1 || page > totalPages) return;
+        currentPage = page;
+        renderResults();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      // ========== KHỞI TẠO ==========
+      checkSession();
     </script>
   </body>
 </html>

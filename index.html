@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hệ thống Tra cứu Hợp đồng</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-slate-50 min-h-screen">
+    <div class="max-w-2xl mx-auto py-12 px-4">
+      <div class="bg-white rounded-xl shadow-sm p-8 border border-slate-200">
+        <h1 class="text-2xl font-bold text-slate-800 mb-6 text-center">
+          Tra cứu thông tin Hợp đồng
+        </h1>
+
+        <div class="flex gap-2 mb-8">
+          <input
+            id="searchInput"
+            type="text"
+            placeholder="Nhập Số HĐ hoặc Tên khách hàng..."
+            class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+          />
+          <button
+            onclick="handleSearch()"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+          >
+            Tìm kiếm
+          </button>
+        </div>
+
+        <div id="loading" class="hidden text-center py-4">
+          <div
+            class="animate-spin inline-block w-6 h-6 border-[3px] border-current border-t-transparent text-blue-600 rounded-full"
+            role="status"
+          ></div>
+          <p class="text-slate-500 mt-2">Đang truy vấn dữ liệu...</p>
+        </div>
+
+        <div id="results" class="space-y-4"></div>
+      </div>
+    </div>
+
+    <script>
+      const API_URL = "https://script.google.com/macros/s/AKfycbzOs45l1d-WjUutnsI0EkDZ2ZkvUGiB4TAUw6kRNF-rGjzECu22TrJTB59_0KwI7VDy/exec";
+
+      async function handleSearch() {
+        const query = document.getElementById("searchInput").value.trim();
+        if (!query) return;
+
+        const resultsDiv = document.getElementById("results");
+        const loading = document.getElementById("loading");
+
+        resultsDiv.innerHTML = "";
+        loading.classList.remove("hidden");
+
+        try {
+          const response = await fetch(
+            `${API_URL}?q=${encodeURIComponent(query)}`
+          );
+          const data = await response.json();
+
+          loading.classList.add("hidden");
+
+          if (data.length === 0) {
+            resultsDiv.innerHTML =
+              '<p class="text-center text-slate-500">Không tìm thấy dữ liệu phù hợp.</p>';
+            return;
+          }
+
+          resultsDiv.innerHTML = data
+            .map(
+              (item) => `
+                    <div class="p-4 border border-slate-100 rounded-lg bg-slate-50 hover:bg-white hover:shadow-md transition-all">
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <span class="text-slate-500">Số Hợp đồng:</span>
+                            <span class="font-bold text-slate-800">${
+                              item["Số Hợp đồng"] || "N/A"
+                            }</span>
+                            <span class="text-slate-500">Khách hàng:</span>
+                            <span class="font-medium">${
+                              item["Khách hàng trên hợp đồng"] || "N/A"
+                            }</span>
+                            <span class="text-slate-500">Sản phẩm:</span>
+                            <span>${
+                              item["Sản phẩm đăng quảng cáo"] || "N/A"
+                            }</span>
+                        </div>
+                    </div>
+                `
+            )
+            .join("");
+        } catch (error) {
+          loading.classList.add("hidden");
+          resultsDiv.innerHTML =
+            '<p class="text-center text-red-500">Lỗi kết nối API. Vui lòng kiểm tra lại.</p>';
+        }
+      }
+    </script>
+  </body>
+</html>

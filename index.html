@@ -42,87 +42,80 @@
     </div>
 
     <script>
-      const SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbukrHYV2wCa5Qto147Vww5E4_u-wXrNl_M24ZIRpOJ4bGbrrsxurui2MRlSuzxs9_EyEYB84qTudh/pub?gid=1482399048&single=true&output=csv";
-      const CSV_URL = "https://api.allorigins.win/raw?url=" + encodeURIComponent(SHEET_CSV);
+      // Sử dụng Google Visualization API (JSONP - không bị CORS)
+      const SHEET_ID = "1o-0FD2Ej7bew8lRlIBnsW-EfDPVnnuXSN1y9qX_Bg6o";
+      const SHEET_GID = "1482399048";
 
       let allData = [];
       let headers = [];
 
-      // Parse CSV thành array
-      function parseCSV(csv) {
-        const lines = csv.split('\n');
-        const result = [];
-
-        // Xử lý header
-        headers = parseCSVLine(lines[0]);
-
-        // Xử lý data
-        for (let i = 1; i < lines.length; i++) {
-          if (lines[i].trim()) {
-            const values = parseCSVLine(lines[i]);
-            const obj = {};
-            headers.forEach((header, index) => {
-              obj[header] = values[index] || '';
-            });
-            result.push(obj);
-          }
-        }
-        return result;
-      }
-
-      // Parse một dòng CSV (xử lý trường hợp có dấu phẩy trong ngoặc kép)
-      function parseCSVLine(line) {
-        const result = [];
-        let current = '';
-        let inQuotes = false;
-
-        for (let i = 0; i < line.length; i++) {
-          const char = line[i];
-
-          if (char === '"') {
-            inQuotes = !inQuotes;
-          } else if (char === ',' && !inQuotes) {
-            result.push(current.trim());
-            current = '';
-          } else {
-            current += char;
-          }
-        }
-        result.push(current.trim());
-        return result;
-      }
-
-      // Load dữ liệu khi trang được mở
-      async function loadData() {
+      // Load dữ liệu qua Google Visualization API (JSONP)
+      function loadData() {
         const statusDiv = document.getElementById("results");
-        try {
-          statusDiv.innerHTML = '<p class="text-center text-slate-500">Đang tải dữ liệu...</p>';
-          const response = await fetch(CSV_URL);
+        statusDiv.innerHTML = '<p class="text-center text-slate-500">Đang tải dữ liệu...</p>';
 
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+
+        // Tạo script tag để load JSONP
+        const script = document.createElement('script');
+        script.src = url;
+
+        // Google trả về dạng: google.visualization.Query.setResponse({...})
+        // Ta cần parse response này
+        window.google = window.google || {};
+        window.google.visualization = window.google.visualization || {};
+        window.google.visualization.Query = window.google.visualization.Query || {};
+        window.google.visualization.Query.setResponse = function(response) {
+          try {
+            const table = response.table;
+
+            // Lấy headers
+            headers = table.cols.map(col => col.label || col.id);
+            console.log('Headers:', headers);
+
+            // Lấy data
+            allData = table.rows.map(row => {
+              const obj = {};
+              row.c.forEach((cell, index) => {
+                const value = cell ? (cell.v !== null ? cell.v : '') : '';
+                obj[headers[index]] = value;
+              });
+              return obj;
+            });
+
+            console.log('Đã tải', allData.length, 'hợp đồng');
+            if (allData.length > 0) {
+              console.log('Dòng đầu tiên:', allData[0]);
+            }
+
+            statusDiv.innerHTML = `<p class="text-center text-green-600">Đã tải ${allData.length} hợp đồng. Nhập từ khóa để tìm kiếm.</p>`;
+          } catch (error) {
+            console.error('Lỗi parse dữ liệu:', error);
+            statusDiv.innerHTML = `<p class="text-center text-red-500">Lỗi xử lý dữ liệu: ${error.message}</p>`;
           }
+        };
 
-          const csv = await response.text();
-          console.log('Raw CSV (100 ký tự đầu):', csv.substring(0, 100));
+        script.onerror = function() {
+          statusDiv.innerHTML = '<p class="text-center text-red-500">Lỗi tải dữ liệu từ Google Sheets</p>';
+        };
 
-          allData = parseCSV(csv);
-          console.log('Đã tải', allData.length, 'hợp đồng');
-          console.log('Headers:', headers);
-          if (allData.length > 0) {
-            console.log('Dòng đầu tiên:', allData[0]);
-          }
+        document.body.appendChild(script);
+      }
 
-          statusDiv.innerHTML = `<p class="text-center text-green-600">Đã tải ${allData.length} hợp đồng. Nhập từ khóa để tìm kiếm.</p>`;
-        } catch (error) {
-          console.error('Lỗi tải dữ liệu:', error);
-          statusDiv.innerHTML = `<p class="text-center text-red-500">Lỗi tải dữ liệu: ${error.message}</p>`;
-        }
+      // Chuẩn hóa text để tìm kiếm (bỏ dấu, lowercase)
+      function normalizeText(text) {
+        return text
+          .toString()
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/đ/g, "d")
+          .replace(/Đ/g, "D");
       }
 
       // Tìm kiếm
-      async function handleSearch() {
-        const query = document.getElementById("searchInput").value.trim().toLowerCase();
+      function handleSearch() {
+        const query = document.getElementById("searchInput").value.trim();
         if (!query) return;
 
         const resultsDiv = document.getElementById("results");
@@ -131,24 +124,42 @@
         resultsDiv.innerHTML = "";
         loading.classList.remove("hidden");
 
-        // Nếu chưa load data, load ngay
+        // Nếu chưa load data
         if (allData.length === 0) {
-          await loadData();
+          loading.classList.add("hidden");
+          resultsDiv.innerHTML = '<p class="text-center text-red-500">Dữ liệu chưa được tải. Vui lòng đợi hoặc refresh trang.</p>';
+          return;
         }
+
+        const normalizedQuery = normalizeText(query);
+        console.log('Tìm kiếm:', query, '→ normalized:', normalizedQuery);
 
         // Tìm kiếm
         const results = allData.filter(item => {
-          return Object.values(item).some(value =>
-            value.toString().toLowerCase().includes(query)
-          );
+          return Object.values(item).some(value => {
+            const normalizedValue = normalizeText(value);
+            return normalizedValue.includes(normalizedQuery);
+          });
         });
 
+        console.log('Kết quả:', results.length);
         loading.classList.add("hidden");
 
         if (results.length === 0) {
           resultsDiv.innerHTML = '<p class="text-center text-slate-500">Không tìm thấy dữ liệu phù hợp.</p>';
           return;
         }
+
+        // Lấy tên cột từ headers
+        const colSoHD = headers.find(h => h.includes('Số Hợp đồng') || h.includes('Số HĐ')) || headers[1];
+        const colNgay = headers.find(h => h.includes('Ngày') || h.includes('ngày')) || headers[0];
+        const colKH = headers.find(h => h.includes('Khách hàng')) || headers[2];
+        const colLinhVuc = headers.find(h => h.includes('Lãnh vực') || h.includes('Lĩnh vực')) || headers[4];
+        const colSanPham = headers.find(h => h.includes('Sản phẩm')) || headers[5];
+        const colLoaiHinh = headers.find(h => h.includes('Loại hình')) || headers[8];
+        const colViTri = headers.find(h => h.includes('Vị trí')) || headers[9];
+        const colSoKy = headers.find(h => h.includes('Số kỳ')) || headers[12];
+        const colNguoiTH = headers.find(h => h.includes('Người thực hiện')) || headers[13];
 
         resultsDiv.innerHTML = `
           <p class="text-sm text-slate-500 mb-4">Tìm thấy ${results.length} kết quả</p>
@@ -157,39 +168,39 @@
               <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                 <div>
                   <span class="text-slate-500">Số Hợp đồng:</span>
-                  <span class="font-bold text-blue-600 ml-1">${item['Số Hợp đồng'] || 'N/A'}</span>
+                  <span class="font-bold text-blue-600 ml-1">${item[colSoHD] || 'N/A'}</span>
                 </div>
                 <div>
                   <span class="text-slate-500">Ngày:</span>
-                  <span class="ml-1">${item['Ngày/tháng/năm'] || 'N/A'}</span>
+                  <span class="ml-1">${item[colNgay] || 'N/A'}</span>
                 </div>
                 <div>
                   <span class="text-slate-500">Khách hàng:</span>
-                  <span class="font-medium ml-1">${item['Khách hàng trên hợp đồng'] || 'N/A'}</span>
+                  <span class="font-medium ml-1">${item[colKH] || 'N/A'}</span>
                 </div>
                 <div>
                   <span class="text-slate-500">Lĩnh vực:</span>
-                  <span class="ml-1">${item['Lãnh vực kinh doanh'] || 'N/A'}</span>
+                  <span class="ml-1">${item[colLinhVuc] || 'N/A'}</span>
                 </div>
                 <div>
                   <span class="text-slate-500">Sản phẩm:</span>
-                  <span class="ml-1">${item['Sản phẩm đăng quảng cáo'] || 'N/A'}</span>
+                  <span class="ml-1">${item[colSanPham] || 'N/A'}</span>
                 </div>
                 <div>
                   <span class="text-slate-500">Loại hình QC:</span>
-                  <span class="ml-1">${item['Loại hình quảng cáo'] || 'N/A'}</span>
+                  <span class="ml-1">${item[colLoaiHinh] || 'N/A'}</span>
                 </div>
                 <div>
                   <span class="text-slate-500">Vị trí:</span>
-                  <span class="ml-1">${item['Vị trí đăng'] || 'N/A'}</span>
+                  <span class="ml-1">${item[colViTri] || 'N/A'}</span>
                 </div>
                 <div>
                   <span class="text-slate-500">Số kỳ:</span>
-                  <span class="ml-1">${item['Số kỳ đang thực hiện / Tổng số kỳ trong hợp đồng'] || 'N/A'}</span>
+                  <span class="ml-1">${item[colSoKy] || 'N/A'}</span>
                 </div>
                 <div class="md:col-span-2">
                   <span class="text-slate-500">Người thực hiện:</span>
-                  <span class="ml-1">${item['Người thực hiện hợp đồng'] || 'N/A'}</span>
+                  <span class="ml-1">${item[colNguoiTH] || 'N/A'}</span>
                 </div>
               </div>
             </div>

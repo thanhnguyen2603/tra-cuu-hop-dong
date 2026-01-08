@@ -42,7 +42,8 @@
     </div>
 
     <script>
-      const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbukrHYV2wCa5Qto147Vww5E4_u-wXrNl_M24ZIRpOJ4bGbrrsxurui2MRlSuzxs9_EyEYB84qTudh/pub?gid=1482399048&single=true&output=csv";
+      const SHEET_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbukrHYV2wCa5Qto147Vww5E4_u-wXrNl_M24ZIRpOJ4bGbrrsxurui2MRlSuzxs9_EyEYB84qTudh/pub?gid=1482399048&single=true&output=csv";
+      const CSV_URL = "https://api.allorigins.win/raw?url=" + encodeURIComponent(SHEET_CSV);
 
       let allData = [];
       let headers = [];
@@ -93,13 +94,29 @@
 
       // Load dữ liệu khi trang được mở
       async function loadData() {
+        const statusDiv = document.getElementById("results");
         try {
+          statusDiv.innerHTML = '<p class="text-center text-slate-500">Đang tải dữ liệu...</p>';
           const response = await fetch(CSV_URL);
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
           const csv = await response.text();
+          console.log('Raw CSV (100 ký tự đầu):', csv.substring(0, 100));
+
           allData = parseCSV(csv);
           console.log('Đã tải', allData.length, 'hợp đồng');
+          console.log('Headers:', headers);
+          if (allData.length > 0) {
+            console.log('Dòng đầu tiên:', allData[0]);
+          }
+
+          statusDiv.innerHTML = `<p class="text-center text-green-600">Đã tải ${allData.length} hợp đồng. Nhập từ khóa để tìm kiếm.</p>`;
         } catch (error) {
           console.error('Lỗi tải dữ liệu:', error);
+          statusDiv.innerHTML = `<p class="text-center text-red-500">Lỗi tải dữ liệu: ${error.message}</p>`;
         }
       }
 
